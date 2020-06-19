@@ -126,7 +126,7 @@ def get_problem_features_rq(queue, filename, timeout):
             r = job.result
             job.delete()
             if r is None:
-                raise ProblemFeaturesFailedException(filename, timeout)
+                raise ProblemFeaturesFailedException(filename, timeout, None)
 
             return r
 
@@ -142,7 +142,7 @@ def get_problem_features_rq(queue, filename, timeout):
     job.delete()
     raise ProblemFeaturesTimeoutException(filename, timeout, "Waited for rq, but failed")
 
-MAX_DISPATCHERS = 8
+MAX_DISPATCHERS = 16
 def get_features(tptpdir, prob_timeout, timeout, dispatchers = MAX_DISPATCHERS):
     redis_conn = Redis()
     q = Queue(connection=redis_conn)
