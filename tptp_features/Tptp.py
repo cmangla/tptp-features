@@ -1,5 +1,6 @@
 from pathlib import Path
 from pprint import pprint
+import re
 
 from collections import namedtuple
 
@@ -52,13 +53,34 @@ class Tptp:
 
                     metadata[lastkey].append(l.strip())
 
-            # for k, v in metadata.items():
-            #     if len(v) == 1:
-            #         metadata[k] = v[0]
+            # Flatten metadata (needed?)
+            for k, v in metadata.items():
+                if len(v) == 1:
+                    metadata[k] = v[0]
 
             return metadata
 
+    def get_problems(self, metamatch=None):
+        if not metamatch:
+            yield from self.problems.values()
+            return
+
+        metamatch = {k: re.compile(v) for k, v in metamatch.items()}
+        for problem in self.problems.values():
+            matched = True
+            for key, rx in metamatch.items():
+                if not key in problem.meta:
+                    matched = False
+                    break
+
+                text = str(problem.meta[key])
+                if rx.fullmatch(text) is None:
+                    matched = False
+                    break
+
+            if matched: yield problem
 
 if __name__ == "__main__":
     t  = Tptp("../../tptp-parser/")
-    pprint(t.problems['SET001-1'])
+    for p in t.get_problems({'SPC': 'FOF_.*'}):
+        print(p.meta['SPC'])
