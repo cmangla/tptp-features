@@ -77,7 +77,7 @@ def get_features(tptp, prob_timeout, timeout, dispatchers = MAX_DISPATCHERS):
     data = []
     problems = list(tptp.get_problems({'SPC': 'FOF_.*'}))
     random.shuffle(problems)
-    completed_problems = []
+    completed_problems = set()
     with futures.ThreadPoolExecutor(max_workers=dispatchers) as executor:
         future_problems = [executor.submit(get_problem_features_rq, queue, p, prob_timeout)
                             for p in problems]
@@ -91,7 +91,7 @@ def get_features(tptp, prob_timeout, timeout, dispatchers = MAX_DISPATCHERS):
                     logging.exception("Future returned an exception: %s", str(e))
                 else:
                     data.append(s)
-                    completed_problems.append(tptp.problems[s.name])
+                    completed_problems.add(s.name)
                     logging.debug("Completed %s", s.name)
 
         except futures.TimeoutError as e:
@@ -103,7 +103,7 @@ def get_features(tptp, prob_timeout, timeout, dispatchers = MAX_DISPATCHERS):
             
             logging.debug("Cancelled incomplete problems")
 
-    incomplete = {p.name for p in problems} - {p.name for p in completed_problems}
+    incomplete = {(p.group, p.name) for p in problems} - completed_problems
     return pandas.DataFrame(data), incomplete
 
 if __name__ == "__main__":

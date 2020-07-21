@@ -73,6 +73,6 @@ def get_problem_features(problem):
     c = Counter([lex_types[t.type] for t in lexer.getAllTokens()
                     if t.type in lex_types_all])
     lexer.reset()
-    return pd.Series(c, dtype=np.float64, name=problem.name).reindex(
+    return pd.Series(c, dtype=np.float64, name=(problem.group, problem.name)).reindex(
             get_features_index(), fill_value=0.0)
 

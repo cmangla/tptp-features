@@ -4,7 +4,7 @@ import re
 
 from collections import namedtuple
 
-TptpProblem = namedtuple("TptpProblem", "name file meta")
+TptpProblem = namedtuple("TptpProblem", "group name file meta tptp")
 
 class TptpMetaParseException(Exception):
     pass
@@ -15,7 +15,7 @@ class Tptp:
     def __init__(self, tptpdir):
         self.tptpdir = Path(tptpdir)
         self.problems = self.tptpdir.glob("Problems/*/*.p")
-        self.problems = [TptpProblem(name=p.stem, file=p, meta=self._parse_meta(p)) for p in self.problems]
+        self.problems = [TptpProblem(group=p.parent.stem, name=p.stem, file=p, meta=self._parse_meta(p), tptp=self) for p in self.problems]
         self.problems = {p.name: p for p in self.problems}
 
     def _parse_meta(self, problem):
