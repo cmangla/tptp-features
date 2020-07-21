@@ -64,8 +64,8 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
 def get_features_index():
     return LEX_FEATURES
 
-def get_problem_features(filename, tptpdir=None):
-    input = FileStream(filename)
+def get_problem_features(problem):
+    input = FileStream(problem.file)
     lexer = tptp_v7_0_0_0Lexer(input)
     lex_types = dict([(getattr(tptp_v7_0_0_0Lexer, l), l)
                         for l in LEX_FEATURES])
@@ -73,6 +73,6 @@ def get_problem_features(filename, tptpdir=None):
     c = Counter([lex_types[t.type] for t in lexer.getAllTokens()
                     if t.type in lex_types_all])
     lexer.reset()
-    return pd.Series(c, dtype=np.float64, name=filename).reindex(
+    return pd.Series(c, dtype=np.float64, name=problem.name).reindex(
             get_features_index(), fill_value=0.0)
 

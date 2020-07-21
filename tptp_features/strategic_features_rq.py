@@ -10,30 +10,31 @@ from redis import Redis
 import pandas
 
 from .strategic_features import get_problem_features
+from .Tptp import Tptp
     
 class ProblemFeaturesTimeoutException(Exception):
-    def __init__(self, filename, timeout, message=None):
+    def __init__(self, name, timeout, message=None):
         if message is None:
-            message = filename
+            message = name
 
         super().__init__(message)
-        self.filename = filename
+        self.name = name
         self.timeout = timeout
 
 class ProblemFeaturesFailedException(Exception):
-    def __init__(self, filename, timeout, exc_info, message=None):
+    def __init__(self, name, timeout, exc_info, message=None):
         if message is None:
-            message = exc_info if exc_info is not None else filename
+            message = exc_info if exc_info is not None else name
 
         super().__init__(message)
-        self.filename = filename
+        self.name = name
         self.timeout = timeout
         self.exc_info = exc_info
 
-def get_problem_features_rq(queue, filename, timeout):
+def get_problem_features_rq(queue, problem, timeout):
     job = queue.enqueue(
         get_problem_features,
-        args=(filename,),
+        args=(problem,),
         job_timeout=timeout,
         failure_ttl=10
         )
@@ -52,46 +53,46 @@ def get_problem_features_rq(queue, filename, timeout):
             r = job.result
             job.delete()
             if r is None:
-                raise ProblemFeaturesFailedException(filename, timeout, None)
+                raise ProblemFeaturesFailedException(problem.name, timeout, None)
 
             return r
 
         if job.is_failed:
             e = job.exc_info
             job.delete()
-            raise ProblemFeaturesFailedException(filename, timeout, e)
+            raise ProblemFeaturesFailedException(problem.name, timeout, e)
 
         trials = min(trials + 1, 512)
         sleep_time = random.uniform(0, 2**trials - 1) * SLEEP_TIME_FACTOR
         sleep_time = min(sleep_time, timeout - time_slept)
 
     job.delete()
-    raise ProblemFeaturesTimeoutException(filename, timeout, "Waited for rq, but failed")
+    raise ProblemFeaturesTimeoutException(problem.name, timeout, "Waited for rq, but failed")
 
 MAX_DISPATCHERS = 16
-def get_features(tptpdir, prob_timeout, timeout, dispatchers = MAX_DISPATCHERS):
+def get_features(tptp, prob_timeout, timeout, dispatchers = MAX_DISPATCHERS):
     redis_conn = Redis()
-    q = Queue(connection=redis_conn)
+    queue = Queue(connection=redis_conn)
 
-    data = {}
-    problems = list(Path(tptpdir).glob("Problems/*/*.p"))
+    data = []
+    problems = list(tptp.get_problems({'SPC': 'FOF_.*'}))
     random.shuffle(problems)
-    completed_problems = set()
+    completed_problems = []
     with futures.ThreadPoolExecutor(max_workers=dispatchers) as executor:
-        future_problems = [executor.submit(get_problem_features_rq, q, p, prob_timeout)
+        future_problems = [executor.submit(get_problem_features_rq, queue, p, prob_timeout)
                             for p in problems]
         try:
             for future in futures.as_completed(future_problems, timeout=timeout):
                 try:
                     s = future.result()
-                except ProblemFeaturesTimeoutException as e:
-                    logging.exception("Timed-out: %s", e.filename)
+                except (ProblemFeaturesTimeoutException, ProblemFeaturesFailedException) as e:
+                    logging.exception("Timed-out: %s", e.name)
                 except Exception as e:
                     logging.exception("Future returned an exception: %s", str(e))
                 else:
-                    p = s.name
-                    data[(p.parent.name, p.name)] = s
-                    completed_problems.add(p)
+                    data.append(s)
+                    completed_problems.append(tptp.problems[s.name])
+                    logging.debug("Completed %s", s.name)
 
         except futures.TimeoutError as e:
             incomplete = [f for f in future_problems if not f.done()]
@@ -99,9 +100,11 @@ def get_features(tptpdir, prob_timeout, timeout, dispatchers = MAX_DISPATCHERS):
             while incomplete:
                 for f in incomplete: f.cancel()
                 incomplete = [f for f in incomplete if not f.done()]
+            
+            logging.debug("Cancelled incomplete problems")
 
-    incomplete = set(problems) - completed_problems
-    return pandas.DataFrame(data).T, incomplete
+    incomplete = {p.name for p in problems} - {p.name for p in completed_problems}
+    return pandas.DataFrame(data), incomplete
 
 if __name__ == "__main__":
     import sys
