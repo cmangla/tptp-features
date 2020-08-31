@@ -11,6 +11,8 @@ import pandas
 
 from .strategic_features import get_problem_features
 from .Tptp import Tptp
+
+DEFAULT_MAX_DISPATCHERS = 16
     
 class ProblemFeaturesTimeoutException(Exception):
     def __init__(self, name, timeout, message=None):
@@ -69,8 +71,8 @@ def get_problem_features_rq(queue, problem, timeout):
     job.delete()
     raise ProblemFeaturesTimeoutException(problem.name, timeout, "Waited for rq, but failed")
 
-MAX_DISPATCHERS = 16
-def get_features(tptp, prob_timeout, timeout, dispatchers = MAX_DISPATCHERS):
+
+def get_features(tptp, prob_timeout, timeout, dispatchers = DEFAULT_MAX_DISPATCHERS):
     redis_conn = Redis()
     queue = Queue(connection=redis_conn)
 
