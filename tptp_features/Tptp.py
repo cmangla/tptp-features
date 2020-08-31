@@ -5,6 +5,7 @@ import re
 from collections import namedtuple
 
 TptpProblem = namedtuple("TptpProblem", "group name file meta tptp")
+TptpAxiom   = namedtuple("TptpAxiom", "name file meta tptp")
 
 class TptpMetaParseException(Exception):
     pass
@@ -15,8 +16,20 @@ class Tptp:
     def __init__(self, tptpdir):
         self.tptpdir = Path(tptpdir)
         self.problems = self.tptpdir.glob("Problems/*/*.p")
-        self.problems = [TptpProblem(group=p.parent.stem, name=p.stem, file=p, meta=self._parse_meta(p), tptp=self) for p in self.problems]
+        self.problems = [
+            TptpProblem(
+                group=p.parent.stem, name=p.stem, file=p,
+                meta=self._parse_meta(p), tptp=self)
+            for p in self.problems]
         self.problems = {p.name: p for p in self.problems}
+
+        self.axioms = self.tptpdir.glob("Axioms/**/*.ax")
+        self.axioms = [
+            TptpAxiom(
+                name='/'.join(a.parts[1:-1] + (a.stem,)),
+                file=a, meta=self._parse_meta(a), tptp=self)
+            for a in self.axioms]
+        self.axioms = {a.name: a for a in self.axioms}
 
     def _parse_meta(self, problem):
         problem = Path(problem)
@@ -81,6 +94,8 @@ class Tptp:
             if matched: yield problem
 
 if __name__ == "__main__":
-    t  = Tptp("../../tptp-parser/")
-    for p in t.get_problems({'SPC': 'FOF_.*'}):
-        print(p.meta['SPC'])
+    import cProfile
+    cProfile.run('t  = Tptp("../../tptp-parser/")')
+    # for p in t.get_problems({'SPC': 'FOF_.*'}):
+    #    print(p.meta['SPC'])
+    #print(t.axioms.keys())
