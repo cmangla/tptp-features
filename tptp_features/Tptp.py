@@ -26,7 +26,8 @@ class Tptp:
         self.axioms = self.tptpdir.glob("Axioms/**/*.ax")
         self.axioms = [
             TptpAxiom(
-                name='/'.join(a.parts[1:-1] + (a.stem,)),
+                #name='/'.join(a.parts[1:-1] + (a.stem,)),
+                name=a.stem,
                 file=a, meta=self._parse_meta(a), tptp=self)
             for a in self.axioms]
         self.axioms = {a.name: a for a in self.axioms}
@@ -92,6 +93,15 @@ class Tptp:
                     break
 
             if matched: yield problem
+
+    def find_by_name(self, problem_name):
+        problem_name = Path(problem_name)
+        if problem_name.parents[0].name == 'Axioms':
+            return self.axioms[problem_name.stem]
+        elif problem_name.parents[0].name == 'Problems':
+            return self.problems[problem_name.stem]
+        else:
+            return None
 
 if __name__ == "__main__":
     import cProfile
