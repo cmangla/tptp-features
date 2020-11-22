@@ -10,9 +10,10 @@ from redis import Redis
 import pandas
 
 from .strategic_features import get_problem_features
-from .Tptp import Tptp
 
 DEFAULT_MAX_DISPATCHERS = 16
+FAILURE_TTL = 3600*48
+RESULTS_TTL = 3600
     
 class ProblemFeaturesTimeoutException(Exception):
     def __init__(self, name, timeout, message=None):
@@ -38,19 +39,19 @@ def get_problem_features_rq(queue, problem, timeout):
         get_problem_features,
         args=(problem,),
         job_timeout=timeout,
-        failure_ttl=10
+        failure_ttl=FAILURE_TTL,
+        results_ttl=RESULTS_TTL
         )
 
     SLEEP_TIME_FACTOR = 0.1
     SLEEP_TIME_INITIAL = 0.001
+    TIMEOUT_MARGIN = 1.0
 
     time_slept = 0
     sleep_time = SLEEP_TIME_INITIAL
     trials = 0
-    while time_slept < timeout:
-        time.sleep(sleep_time)
-        time_slept += sleep_time
 
+    def check_job():
         if job.is_finished:
             r = job.result
             job.delete()
@@ -64,21 +65,36 @@ def get_problem_features_rq(queue, problem, timeout):
             job.delete()
             raise ProblemFeaturesFailedException(problem.name, timeout, e)
 
+        return None
+
+    while time_slept < (timeout*10):
+        time.sleep(sleep_time)
+        time_slept += sleep_time
+
+        r = check_job()
+        if r is not None: return r
+
         trials = min(trials + 1, 512)
         sleep_time = random.uniform(0, 2**trials - 1) * SLEEP_TIME_FACTOR
         sleep_time = min(sleep_time, timeout - time_slept)
+        sleep_time = max(1.0, sleep_time)
 
+    time.sleep(TIMEOUT_MARGIN)
+    r = check_job()
+    if r is not None: return r
+    j_status = job.get_status()
     job.delete()
-    raise ProblemFeaturesTimeoutException(problem.name, timeout, "Waited for rq, but failed")
+    raise ProblemFeaturesTimeoutException(
+        problem.name,
+        timeout,
+        f"Waited for rq, but failed, status: {j_status}")
 
 
-def get_features(tptp, prob_timeout, timeout, dispatchers = DEFAULT_MAX_DISPATCHERS):
+def get_features(problems, prob_timeout, timeout, dispatchers = DEFAULT_MAX_DISPATCHERS):
     redis_conn = Redis()
     queue = Queue(connection=redis_conn)
 
     data = []
-    problems = list(tptp.get_problems({'SPC': 'FOF_.*'}))
-    random.shuffle(problems)
     completed_problems = set()
     with futures.ThreadPoolExecutor(max_workers=dispatchers) as executor:
         future_problems = [executor.submit(get_problem_features_rq, queue, p, prob_timeout)
@@ -88,7 +104,7 @@ def get_features(tptp, prob_timeout, timeout, dispatchers = DEFAULT_MAX_DISPATCH
                 try:
                     s = future.result()
                 except (ProblemFeaturesTimeoutException, ProblemFeaturesFailedException) as e:
-                    logging.exception("Timed-out: %s", e.name)
+                    logging.debug("Timed-out: %s", e.name)
                 except Exception as e:
                     logging.exception("Future returned an exception: %s", str(e))
                 else:
