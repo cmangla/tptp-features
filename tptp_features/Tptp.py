@@ -1,11 +1,18 @@
 from pathlib import Path
 from pprint import pprint
 import re
+import pickle
+import logging
 
 from collections import namedtuple
 
-TptpProblem = namedtuple("TptpProblem", "group name file meta tptp")
-TptpAxiom   = namedtuple("TptpAxiom", "name file meta tptp")
+TptpProblem = namedtuple("TptpProblem", "group name file tptp")
+TptpAxiom   = namedtuple("TptpAxiom", "name file tptp")
+
+TPTP_PY_CACHE_FILENAME = 'Tptp.py.cache.pickle'
+
+class TptpException(Exception):
+    pass
 
 class TptpMetaParseException(Exception):
     pass
@@ -15,25 +22,36 @@ class Tptp:
 
     def __init__(self, tptpdir):
         self.tptpdir = Path(tptpdir)
-        self.problems = self.tptpdir.glob("Problems/*/*.p")
-        self.problems = [
-            TptpProblem(
-                group=p.parent.stem, name=p.stem, file=p,
-                meta=self._parse_meta(p), tptp=self)
-            for p in self.problems]
-        self.problems = {p.name: p for p in self.problems}
+        try:
+            with (self.tptpdir / TPTP_PY_CACHE_FILENAME).open(mode='rb') as j:
+                data = pickle.load(j)
+                logging.debug(f"Loaded cache from {TPTP_PY_CACHE_FILENAME}")
+                self.problems = data['problems']
+                self.axioms = data['axioms']
+        except EnvironmentError:
+            self.problems = self.tptpdir.glob("Problems/*/*.p")
+            self.problems = [
+                TptpProblem(
+                    group=p.parent.stem, name=p.stem, file=p,
+                    tptp=tptpdir)
+                for p in self.problems]
+            self.problems = {p.name: p for p in self.problems}
 
-        self.axioms = self.tptpdir.glob("Axioms/**/*.ax")
-        self.axioms = [
-            TptpAxiom(
-                #name='/'.join(a.parts[1:-1] + (a.stem,)),
-                name=a.stem,
-                file=a, meta=self._parse_meta(a), tptp=self)
-            for a in self.axioms]
-        self.axioms = {a.name: a for a in self.axioms}
+            self.axioms = self.tptpdir.glob("Axioms/**/*.ax")
+            self.axioms = [
+                TptpAxiom(
+                    #name='/'.join(a.parts[1:-1] + (a.stem,)),
+                    name=a.stem, file=a, tptp=tptpdir)
+                for a in self.axioms]
+            self.axioms = {a.name: a for a in self.axioms}
 
-    def _parse_meta(self, problem):
-        problem = Path(problem)
+            data = dict(problems=self.problems, axioms=self.axioms)
+            with (self.tptpdir / TPTP_PY_CACHE_FILENAME).open(mode='wb') as j:
+                pickle.dump(data, j, protocol=pickle.HIGHEST_PROTOCOL)
+                logging.debug(f"Saved cache to {TPTP_PY_CACHE_FILENAME}")
+
+    def parse_meta(self, problem):
+        problem = Path(problem.file)
         with problem.open() as f:
             l = f.readline()
             if not l.startswith('%-'):
@@ -83,25 +101,30 @@ class Tptp:
         for problem in self.problems.values():
             matched = True
             for key, rx in metamatch.items():
-                if not key in problem.meta:
+                metadata = self.parse_meta(problem)
+                if not key in metadata:
                     matched = False
                     break
 
-                text = str(problem.meta[key])
+                text = str(metadata[key])
                 if rx.fullmatch(text) is None:
                     matched = False
                     break
 
             if matched: yield problem
 
-    def find_by_name(self, problem_name):
+    def find_by_filename(self, problem_name):
         problem_name = Path(problem_name)
-        if problem_name.parents[0].name == 'Axioms':
-            return self.axioms[problem_name.stem]
-        elif problem_name.parents[0].name == 'Problems':
-            return self.problems[problem_name.stem]
-        else:
-            return None
+        problem_type = list(problem_name.parents)[-2].name
+        try:
+            if  problem_type == 'Axioms':
+                return self.axioms[problem_name.stem]
+            elif problem_type == 'Problems':
+                return self.problems[problem_name.stem]
+        except KeyError:
+            pass # Exception will be raised below
+
+        raise TptpException(f"Cannot find {problem_name}")
 
 if __name__ == "__main__":
     import cProfile

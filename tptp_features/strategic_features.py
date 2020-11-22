@@ -3,6 +3,8 @@ from .tptp_v7_0_0_0Lexer import tptp_v7_0_0_0Lexer
 from .tptp_v7_0_0_0Parser import tptp_v7_0_0_0Parser
 from .tptp_v7_0_0_0Listener import tptp_v7_0_0_0Listener
 
+from .Tptp import Tptp
+
 from collections import Counter
 import pandas as pd
 import numpy  as np
@@ -116,19 +118,22 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
         logging.debug("for features, using formulae: " + ",".join(formulae))
         features = Counter()
         quantifier_alternations = 0
+        quantifier_counts = 0
         for formula in formulae:
             q = self.formula_quantifiers[formula]
+            quantifier_counts += len(q)
             for i, j in zip(q, q[1:]):
                 quantifier_alternations += 1 if i != j else 0
 
         features.update({'QUANTIFIER_ALTERNATIONS': quantifier_alternations})
+        features.update({'QUANTIFIERS': quantifier_counts})
         return features
 
 
 def get_features_index():
     return LEX_FEATURES + PARSE_FEATURES
 
-def parse_one(problem, formulae=None):
+def parse_one(tptp, problem, formulae=None):
     infile = FileStream(problem.file)
     lexer = tptp_v7_0_0_0Lexer(infile)
     lex_types = dict([(getattr(tptp_v7_0_0_0Lexer, l), l)
@@ -146,16 +151,17 @@ def parse_one(problem, formulae=None):
     walker.walk(listener, tree)
 
     features.update(listener.get_features(formulae))
-    includes = [(problem.tptp.find_by_name(i), f) for i, f in listener.includes]
+    includes = [(tptp.find_by_filename(i), f) for i, f in listener.includes]
     return features, includes
 
 def parse_with_includes(problem):
+    tptp = Tptp(problem.tptp)
     includes = [(problem, None)]
     features = Counter()
     while includes:
         prob, formulae = includes.pop(0)
         logging.debug('Including {}, {}'.format(prob.name, formulae))
-        prob_features, prob_includes = parse_one(prob, formulae)
+        prob_features, prob_includes = parse_one(tptp, prob, formulae)
         includes.extend(prob_includes)
         features.update(prob_features)
         
