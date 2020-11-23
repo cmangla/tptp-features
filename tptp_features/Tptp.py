@@ -22,10 +22,13 @@ class Tptp:
     """Representing TPTP problem set"""
 
     def __init__(self, tptpdir=None):
-        if tptpdir is None:
-            self.tptpdir = Path(os.environ['TPTP'])
-        else:
+        if (tptpdir is not None
+                and Path(tptpdir).is_dir()
+                and (Path(tptpdir) / 'Problems').is_dir()
+                and (Path(tptpdir) / 'Axioms').is_dir()):
             self.tptpdir = Path(tptpdir)
+        else:
+            self.tptpdir = Path(os.environ['TPTP'])
 
         try:
             with (self.tptpdir / TPTP_PY_CACHE_FILENAME).open(mode='rb') as j:
