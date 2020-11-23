@@ -16,7 +16,7 @@ def get_features(problems, prob_timeout, timeout):
     redis_conn = Redis()
     queue = Queue(connection=redis_conn)
 
-    logging.debug("Queueing jobs ...")
+    logging.debug(f"{time.ctime()} Queueing jobs ...")
     jobs = [
         queue.enqueue(
             get_problem_features,
@@ -26,17 +26,16 @@ def get_features(problems, prob_timeout, timeout):
             failure_ttl=FAILURE_TTL,
         ) for problem in problems
     ]
-    logging.debug(f"... done({len(jobs)})")
+    logging.debug(f"{time.ctime()} ... done ({len(jobs)}).")
     pending = len(jobs)
     jobs = {job.id: job for job in jobs}
+    my_job_ids = set(jobs.keys())
 
-    started_reg = queue.started_job_registry
     finished_reg = queue.finished_job_registry
     failed_reg = queue.failed_job_registry
-    incomplete = set()
 
     data = []
-    while pending > 0 and started_reg.count > 0:
+    while set(queue.get_job_ids()).intersection(my_job_ids):
         time.sleep(LOOP_SLEEP_TIME)
         for job_id in finished_reg.get_job_ids():
             if job_id not in jobs:
@@ -46,20 +45,18 @@ def get_features(problems, prob_timeout, timeout):
             data.append(job.result)
             finished_reg.remove(job_id, delete_job=True)
             pending -= 1
-            logging.debug(f"Finished {job.args[0].name}")
+            logging.debug(f"{time.ctime()} Finished {job.args[0].name}")
 
         for job_id in failed_reg.get_job_ids():
             if job_id not in jobs:
                 continue
 
             job = jobs[job_id]
-            logging.debug(f"Failed {job.args[0].name} with exception {job.exc_info}")
-            p = job.args[0]
-            incomplete.add((p.group, p.name))
+            logging.debug(f"{time.ctime()} Failed {job.args[0].name} with exception {job.exc_info}")
             failed_reg.remove(job_id, delete_job=True)
             pending -= 1
 
     if pending > 0:
-        logging.debug(f"Still {pending} pending jobs remain but are not in queue. Probably timed out.")
+        logging.debug(f"{time.ctime()} Still {pending} pending jobs remain but are not in queue. Probably timed out.")
     
-    return pandas.DataFrame(data), incomplete
+    return pandas.DataFrame(data)
