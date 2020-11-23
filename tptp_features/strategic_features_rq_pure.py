@@ -35,6 +35,7 @@ def get_features(problems, prob_timeout, timeout):
     failed_reg = queue.failed_job_registry
 
     data = []
+    failed = []
     while set(queue.get_job_ids()).intersection(my_job_ids):
         time.sleep(LOOP_SLEEP_TIME)
         for job_id in finished_reg.get_job_ids():
@@ -42,6 +43,7 @@ def get_features(problems, prob_timeout, timeout):
                 continue
 
             job = jobs[job_id]
+            job.refresh()
             data.append(job.result)
             finished_reg.remove(job_id, delete_job=True)
             pending -= 1
@@ -52,11 +54,13 @@ def get_features(problems, prob_timeout, timeout):
                 continue
 
             job = jobs[job_id]
-            logging.debug(f"{time.ctime()} Failed {job.args[0].name} with exception {job.exc_info}")
+            job.refresh()
+            logging.debug(f"{time.ctime()} Failed {job.args[0].name} with exception {job.exc_info.splitlines()[-1]}")
+            failed.append((job.args[0].name, job.exc_info))
             failed_reg.remove(job_id, delete_job=True)
             pending -= 1
 
     if pending > 0:
         logging.debug(f"{time.ctime()} Still {pending} pending jobs remain but are not in queue. Probably timed out.")
     
-    return pandas.DataFrame(data)
+    return pandas.DataFrame(data), failed
