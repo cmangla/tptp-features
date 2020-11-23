@@ -3,6 +3,7 @@ from pprint import pprint
 import re
 import pickle
 import logging
+import os
 
 from collections import namedtuple
 
@@ -20,8 +21,12 @@ class TptpMetaParseException(Exception):
 class Tptp:
     """Representing TPTP problem set"""
 
-    def __init__(self, tptpdir):
-        self.tptpdir = Path(tptpdir)
+    def __init__(self, tptpdir=None):
+        if tptpdir is None:
+            self.tptpdir = Path(os.environ['TPTP'])
+        else:
+            self.tptpdir = Path(tptpdir)
+
         try:
             with (self.tptpdir / TPTP_PY_CACHE_FILENAME).open(mode='rb') as j:
                 data = pickle.load(j)
