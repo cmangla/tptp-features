@@ -63,6 +63,7 @@ LEX_FEATURES = """
 
 PARSE_FEATURES = """
     QUANTIFIER_ALTERNATIONS
+    QUANTIFIERS
 """.split()
 
 class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
