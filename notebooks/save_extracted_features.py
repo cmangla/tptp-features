@@ -7,8 +7,8 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 #%%
-SINGLE_TIMEOUT = 10
-TOTAL_TIMEOUT = 20
+SINGLE_TIMEOUT = 60*5
+TOTAL_TIMEOUT = 3600*16
 
 #%%
 from tptp_features.Tptp import Tptp
@@ -21,15 +21,16 @@ problems = list(tptp.get_problems({'SPC': 'FOF_.*'}))
 
 #%%
 random.shuffle(problems)
-problems = problems[:30]
+#problems = problems[:30]
 
 #%%
 from tptp_features.strategic_features_rq_pure import get_features
 data, failed = get_features(problems, SINGLE_TIMEOUT, TOTAL_TIMEOUT)
 
 #%%
+import pandas as pd
 store = pd.HDFStore('problem_features.h5')
 store['features'] = data
-store['incomplete'] = incomplete
 store['timeouts'] = pd.Series(dict(single=SINGLE_TIMEOUT, total=TOTAL_TIMEOUT))
 store.close()
+# %%
