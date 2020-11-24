@@ -1,6 +1,4 @@
 from pathlib import Path
-import random
-from concurrent import futures
 import time
 import logging
 
@@ -11,121 +9,58 @@ import pandas
 
 from .strategic_features import get_problem_features
 
-DEFAULT_MAX_DISPATCHERS = 16
 FAILURE_TTL = 3600*48
-RESULTS_TTL = 3600
-    
-class ProblemFeaturesTimeoutException(Exception):
-    def __init__(self, name, timeout, message=None):
-        if message is None:
-            message = name
+LOOP_SLEEP_TIME = 1
 
-        super().__init__(message)
-        self.name = name
-        self.timeout = timeout
-
-class ProblemFeaturesFailedException(Exception):
-    def __init__(self, name, timeout, exc_info, message=None):
-        if message is None:
-            message = exc_info if exc_info is not None else name
-
-        super().__init__(message)
-        self.name = name
-        self.timeout = timeout
-        self.exc_info = exc_info
-
-def get_problem_features_rq(queue, problem, timeout):
-    job = queue.enqueue(
-        get_problem_features,
-        args=(problem,),
-        job_timeout=timeout,
-        failure_ttl=FAILURE_TTL,
-        results_ttl=RESULTS_TTL
-        )
-
-    SLEEP_TIME_FACTOR = 0.1
-    SLEEP_TIME_INITIAL = 0.001
-    TIMEOUT_MARGIN = 1.0
-
-    time_slept = 0
-    sleep_time = SLEEP_TIME_INITIAL
-    trials = 0
-
-    def check_job():
-        if job.is_finished:
-            r = job.result
-            job.delete()
-            if r is None:
-                raise ProblemFeaturesFailedException(problem.name, timeout, None)
-
-            return r
-
-        if job.is_failed:
-            e = job.exc_info
-            job.delete()
-            raise ProblemFeaturesFailedException(problem.name, timeout, e)
-
-        return None
-
-    while time_slept < (timeout*10):
-        time.sleep(sleep_time)
-        time_slept += sleep_time
-
-        r = check_job()
-        if r is not None: return r
-
-        trials = min(trials + 1, 512)
-        sleep_time = random.uniform(0, 2**trials - 1) * SLEEP_TIME_FACTOR
-        sleep_time = min(sleep_time, timeout - time_slept)
-        sleep_time = max(1.0, sleep_time)
-
-    time.sleep(TIMEOUT_MARGIN)
-    r = check_job()
-    if r is not None: return r
-    j_status = job.get_status()
-    job.delete()
-    raise ProblemFeaturesTimeoutException(
-        problem.name,
-        timeout,
-        f"Waited for rq, but failed, status: {j_status}")
-
-
-def get_features(problems, prob_timeout, timeout, dispatchers = DEFAULT_MAX_DISPATCHERS):
+def get_features(problems, prob_timeout, timeout):
     redis_conn = Redis()
     queue = Queue(connection=redis_conn)
 
+    logging.debug(f"{time.ctime()} Queueing jobs ...")
+    jobs = [
+        queue.enqueue(
+            get_problem_features,
+            args=(problem,),
+            job_timeout=prob_timeout,
+            ttl = timeout,
+            failure_ttl=FAILURE_TTL,
+        ) for problem in problems
+    ]
+    logging.debug(f"{time.ctime()} ... done ({len(jobs)}).")
+    pending = len(jobs)
+    jobs = {job.id: job for job in jobs}
+    my_job_ids = set(jobs.keys())
+
+    finished_reg = queue.finished_job_registry
+    failed_reg = queue.failed_job_registry
+
     data = []
-    completed_problems = set()
-    with futures.ThreadPoolExecutor(max_workers=dispatchers) as executor:
-        future_problems = [executor.submit(get_problem_features_rq, queue, p, prob_timeout)
-                            for p in problems]
-        try:
-            for future in futures.as_completed(future_problems, timeout=timeout):
-                try:
-                    s = future.result()
-                except (ProblemFeaturesTimeoutException, ProblemFeaturesFailedException) as e:
-                    logging.debug("Timed-out: %s", e.name)
-                except Exception as e:
-                    logging.exception("Future returned an exception: %s", str(e))
-                else:
-                    data.append(s)
-                    completed_problems.add(s.name)
-                    logging.debug("Completed %s", s.name)
+    failed = []
+    while set(queue.get_job_ids()).intersection(my_job_ids):
+        time.sleep(LOOP_SLEEP_TIME)
+        for job_id in finished_reg.get_job_ids():
+            if job_id not in jobs:
+                continue
 
-        except futures.TimeoutError as e:
-            incomplete = [f for f in future_problems if not f.done()]
-            logging.exception("Some (%d) problems incomplete because of overall timeout", len(incomplete))
-            while incomplete:
-                for f in incomplete: f.cancel()
-                incomplete = [f for f in incomplete if not f.done()]
-            
-            logging.debug("Cancelled incomplete problems")
+            job = jobs[job_id]
+            job.refresh()
+            data.append(job.result)
+            finished_reg.remove(job_id, delete_job=True)
+            pending -= 1
+            logging.debug(f"{time.ctime()} Finished {job.args[0].name}")
 
-    incomplete = {(p.group, p.name) for p in problems} - completed_problems
-    return pandas.DataFrame(data), incomplete
+        for job_id in failed_reg.get_job_ids():
+            if job_id not in jobs:
+                continue
 
-if __name__ == "__main__":
-    import sys
-    random.seed(0)
-    d, _ = get_features(sys.argv[1], 0.1, 3)
-    print(d.describe())
+            job = jobs[job_id]
+            job.refresh()
+            logging.debug(f"{time.ctime()} Failed {job.args[0].name} with exception {job.exc_info.splitlines()[-1]}")
+            failed.append((job.args[0].name, job.exc_info))
+            failed_reg.remove(job_id, delete_job=True)
+            pending -= 1
+
+    if pending > 0:
+        logging.debug(f"{time.ctime()} Still {pending} pending jobs remain but are not in queue. Probably timed out.")
+    
+    return pandas.DataFrame(data), failed

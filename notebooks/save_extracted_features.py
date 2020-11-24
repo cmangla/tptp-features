@@ -24,7 +24,7 @@ random.shuffle(problems)
 #problems = problems[:30]
 
 #%%
-from tptp_features.strategic_features_rq_pure import get_features
+from tptp_features.strategic_features_rq import get_features
 data, failed = get_features(problems, SINGLE_TIMEOUT, TOTAL_TIMEOUT)
 
 #%%
