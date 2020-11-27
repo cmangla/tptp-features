@@ -66,8 +66,10 @@ def get_features(problems, prob_timeout, timeout):
             logging.debug(f"{time.ctime()} Failed {job.args[0].name} with exception {job.exc_info.splitlines()[-1]}")
             failed.append((job.args[0].name, job.exc_info))
             failed_reg.remove(job_id, delete_job=True)
-            pending -= 1
+            # Seems job_ids sometimes change when moving to failed_reg. So
+            # failed job might show up twice here. Still not 100% clear.
 
+    pending -= len(set([n for n,_ in failed])) # Substract failed jobs
     if pending > 0:
         logging.debug(f"{time.ctime()} Still {pending} pending jobs remain but are not in queue. Probably timed out.")
     
