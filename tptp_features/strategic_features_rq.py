@@ -34,10 +34,18 @@ def get_features(problems, prob_timeout, timeout):
     finished_reg = queue.finished_job_registry
     failed_reg = queue.failed_job_registry
 
+    def get_active_jobids():
+        time.sleep(LOOP_SLEEP_TIME)
+        return (
+            set(queue.get_job_ids()) |
+            set(queue.started_job_registry.get_job_ids()) |
+            set(finished_reg.get_job_ids()) |
+            set(failed_reg.get_job_ids())
+        )
+
     data = []
     failed = []
-    while set(queue.get_job_ids()).intersection(my_job_ids):
-        time.sleep(LOOP_SLEEP_TIME)
+    while get_active_jobids().intersection(my_job_ids):
         for job_id in finished_reg.get_job_ids():
             if job_id not in jobs:
                 continue
