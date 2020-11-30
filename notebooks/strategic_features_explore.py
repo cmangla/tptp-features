@@ -3,14 +3,30 @@ cd ..
 
 #%%
 from tptp_features.Tptp import Tptp
-from tptp_features.strategic_features import get_problem_features
+from tptp_features.strategic_features import get_problem_features, parse_with_includes
 tptp = Tptp("../tptp-parser/")
-problems = list(tptp.get_problems({'SPC': 'FOF_.*'}))
 
 #%%
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
+
+# %%
+# Has implies, which causes quantifier negation!
+f = parse_with_includes(tptp.axioms['SET007+1'])
+
+#%%
+# NUM303+1
+
+#include('Axioms/NUM005+0.ax').
+#include('Axioms/NUM005+1.ax').
+#include('Axioms/NUM005+2.ax').
+#
+#fof(n31_not_n12,conjecture,
+#    (  n31 != n21 )).
+
+f = get_problem_features(tptp.problems['NUM303+1'])
+
 
 #%%
 f = get_problem_features(tptp.problems['PUZ069+2'])
@@ -36,11 +52,27 @@ f = get_problem_features(tptp.problems['SYN000+2'])
 a = tptp.find_by_filename('Axioms/SET007/SET007+0.ax')
 f = get_problem_features(tptp.problems['LAT300+2'])
 
-#%%
+# %%
+import pickle
+from pathlib import Path
+problems = list(tptp.get_problems({'SPC': 'FOF_.*'}))
+with Path('problems.pickle').open(mode='wb') as f:
+    pickle.dump(problems, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+# %%
+import pickle
+from pathlib import Path
+with Path('problems.pickle').open(mode='rb') as f:
+    problems = pickle.load(f)
+
+# %%
 import random
 random.seed()
 random.shuffle(problems)
+
+#%%
 for p in problems:
+    print('----')
     print(p.name)
     f = get_problem_features(p)
     input()
