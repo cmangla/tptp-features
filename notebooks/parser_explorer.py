@@ -12,6 +12,13 @@ from pprint import pprint
 from tptp_features.Tptp import Tptp
 tptp = Tptp("../tptp-parser/")
 
+# %%
+import random
+random.seed()
+
+problems = list(tptp.get_problems({'SPC': 'FOF_.*'}))
+random.shuffle(problems)
+
 #%%
 import logging
 logger = logging.getLogger()
@@ -22,6 +29,19 @@ class Listener(tptp_v7_0_0_0Listener):
     def __init__(self):
         super().__init__()
         self.includes = []
+        self.first = True
+
+    def enterEveryRule(self, ctx):
+        if not hasattr(ctx, 'negated_env'):
+            if ctx.parentCtx is None:
+                ctx.negated_env = False
+            else:
+                ctx.negated_env = ctx.parentCtx.negated_env
+
+    def enterFof_binary_nonassoc(self, ctx):
+        if ctx.binary_connective().Impl():
+            logging.debug(f"Flipping context {ctx.negated_env} {ctx.fof_unitary_formula(0).getText()}")
+            ctx.fof_unitary_formula(0).negated_env = not ctx.negated_env
 
     def enterInclude(self, ctx):
         fname = ctx.file_name().Single_quoted().getText().strip("'")
@@ -45,6 +65,9 @@ def parse_one(problem):
     return listener
 
 # %%
+l = parse_one(tptp.axioms['SET006+0'])
+
+# %%
 class TimeoutException(Exception):
     pass
 
@@ -64,11 +87,7 @@ def parse_problem(p):
     return listener.includes
 
 # %%
-import random
-random.seed()
-
-problems = list(tptp.get_problems({'SPC': 'FOF_.*'}))
-random.shuffle(problems)
+l = parse_problem_timeout(problems[3], 3)
 
 # %%
 for c, p in enumerate(problems):
