@@ -1,6 +1,7 @@
 from pathlib import Path
 import time
 import logging
+from enum import Enum, auto
 
 from rq import Queue
 from redis import Redis
@@ -12,7 +13,11 @@ from .strategic_features import get_problem_features
 FAILURE_TTL = 3600*48
 LOOP_SLEEP_TIME = 1
 
-def get_features(problems, prob_timeout, timeout):
+class ParseOutcome(Enum):
+    SUCCESS = auto()
+    FAIL = auto()
+
+def get_features_rq(problems, prob_timeout, timeout):
     redis_conn = Redis()
     queue = Queue(connection=redis_conn)
 
@@ -27,7 +32,7 @@ def get_features(problems, prob_timeout, timeout):
         ) for problem in problems
     ]
     logging.debug(f"{time.ctime()} ... done ({len(jobs)}).")
-    pending = len(jobs)
+
     jobs = {job.id: job for job in jobs}
     my_job_ids = set(jobs.keys())
 
@@ -43,8 +48,6 @@ def get_features(problems, prob_timeout, timeout):
             set(failed_reg.get_job_ids())
         )
 
-    data = []
-    failed = []
     while get_active_jobids().intersection(my_job_ids):
         for job_id in finished_reg.get_job_ids():
             if job_id not in jobs:
@@ -52,9 +55,8 @@ def get_features(problems, prob_timeout, timeout):
 
             job = jobs[job_id]
             job.refresh()
-            data.append(job.result)
+            yield (ParseOutcome.SUCCESS, job)
             finished_reg.remove(job_id, delete_job=True)
-            pending -= 1
             logging.debug(f"{time.ctime()} Finished {job.args[0].name}")
 
         for job_id in failed_reg.get_job_ids():
@@ -64,10 +66,27 @@ def get_features(problems, prob_timeout, timeout):
             job = jobs[job_id]
             job.refresh()
             logging.debug(f"{time.ctime()} Failed {job.args[0].name} with exception {job.exc_info.splitlines()[-1]}")
-            failed.append((job.args[0].name, job.exc_info))
+            yield (ParseOutcome.FAIL, job)
             failed_reg.remove(job_id, delete_job=True)
             # Seems job_ids sometimes change when moving to failed_reg. So
             # failed job might show up twice here. Still not 100% clear.
+
+
+
+def get_features(problems, prob_timeout, timeout):
+    data = []
+    failed = []
+    pending = len(problems)
+
+    data = []
+    for outcome, job in get_features_rq(problems, prob_timeout, timeout):
+        if outcome == ParseOutcome.SUCCESS:
+            data.append(job.result)
+            pending -= 1
+        elif outcome == ParseOutcome.FAIL:
+            failed.append((job.args[0].name, job.exc_info))
+        else:
+            assert False, "Not Reachable"
 
     pending -= len(set([n for n,_ in failed])) # Substract failed jobs
     if pending > 0:
