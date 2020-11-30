@@ -63,6 +63,7 @@ LEX_FEATURES = """
 
 PARSE_FEATURES = """
     QUANTIFIER_ALTERNATIONS
+    QUANTIFIER_ALTERNATIONS_TRUE
     QUANTIFIERS
 """.split()
 
@@ -72,6 +73,7 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
         self.formulae = set()
         self.current_formula = None
         self.formula_quantifiers = {}
+        self.formula_quantifiers_true = {}
         self.includes = []
 
     def enterInclude(self, ctx):
@@ -90,17 +92,20 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
         self.formulae.add(self.current_formula)
 
         self.formula_quantifiers[self.current_formula] = []
+        self.formula_quantifiers_true[self.current_formula] = []
 
     def exitFof_annotated(self, ctx):
         assert self.current_formula == ctx.name().getText()
-        logging.debug("QUANTIFIERS for {}: {}".format(
-            self.current_formula,
-            ','.join(self.formula_quantifiers[self.current_formula])
-            ))
         self.current_formula = None
 
     def enterFof_quantifier(self, ctx):
         self.formula_quantifiers[self.current_formula].append(ctx.getText())
+        assert ctx.Forall() is None or ctx.Exists() is None
+        qf = ctx.Forall() is None # qf is True if quantifier is Exists symbol
+        if ctx.negated_env:
+            qf = not qf
+
+        self.formula_quantifiers_true[self.current_formula].append(qf)
 
     def enterFof_formula(self, ctx):
         # logging.debug(dir(ctx))
@@ -109,24 +114,73 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
         # logging.debug(ctx.fof_sequent())
         pass
 
+    def enterEveryRule(self, ctx):
+        if not hasattr(ctx, 'negated_env'):
+            if ctx.parentCtx is None:
+                ctx.negated_env = False
+            else:
+                ctx.negated_env = ctx.parentCtx.negated_env
+
+    def enterFof_binary_nonassoc(self, ctx):
+        connective = ctx.binary_connective() # connective
+        if connective.Impl():
+            ctx.fof_unitary_formula(0).negated_env = not ctx.negated_env
+        elif connective.If():
+            ctx.fof_unitary_formula(1).negated_env = not ctx.negated_env
+        elif connective.Nor() or connective.Nand():
+            ctx.fof_unitary_formula(0).negated_env = not ctx.negated_env
+            ctx.fof_unitary_formula(1).negated_env = not ctx.negated_env
+        elif connective.Iff():
+            logging.debug('Iff (bi-implication) not implemented for context negation')
+        elif connective.Niff():
+            logging.debug('Niff (XOR) not implemented for context negation')
+        else:
+            logging.debug('UNREACHABLE')
+
+
+    def enterFof_unary_formula(self, ctx):
+        if ctx.unary_connective() and ctx.unary_connective().Not():
+            ctx.fof_unitary_formula().negated_env = not ctx.negated_env
+
     def get_features(self, formulae=None):
+        logging.debug("for features, using formulae: " + ",".join(
+            formulae if formulae else ['ALL']
+        ))
+
         if formulae is None:
             formulae = self.formulae
         else:
             formulae = set(formulae)
             assert(formulae <= self.formulae)
-            
-        logging.debug("for features, using formulae: " + ",".join(formulae))
+
         features = Counter()
         quantifier_alternations = 0
+        quantifier_alternations_true = 0
         quantifier_counts = 0
+
+        for f in formulae:
+            q = self.formula_quantifiers[f]
+            if q:
+                logging.debug(f"Quantifiers[{f}] = {','.join(q)}")
+
+        for f in formulae:
+            q = self.formula_quantifiers_true[f]
+            if q:
+                q = ['?' if i else '!' for i in q]
+                logging.debug(f"Quantifiers_true[{f}] = {','.join(q)}")
+
         for formula in formulae:
             q = self.formula_quantifiers[formula]
             quantifier_counts += len(q)
             for i, j in zip(q, q[1:]):
                 quantifier_alternations += 1 if i != j else 0
 
+            q = self.formula_quantifiers_true[formula]
+            for i, j in zip(q, q[1:]):
+                quantifier_alternations_true += 1 if i != j else 0
+
         features.update({'QUANTIFIER_ALTERNATIONS': quantifier_alternations})
+        features.update({'QUANTIFIER_ALTERNATIONS_TRUE': quantifier_alternations_true})
         features.update({'QUANTIFIERS': quantifier_counts})
         return features
 
