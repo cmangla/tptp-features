@@ -15,8 +15,8 @@ logger.addHandler(ch)
 logger.setLevel(logging.DEBUG)
 
 #%%
-SINGLE_TIMEOUT = 60*5
-TOTAL_TIMEOUT = 3600*16
+SINGLE_TIMEOUT = 10 # 60
+TOTAL_TIMEOUT = 10 # 3600*12
 
 #%%
 from tptp_features.Tptp import Tptp
@@ -25,11 +25,13 @@ random.seed()
 import os
 os.environ['TPTP'] = '/Users/cm772/Documents/Dev/tptp-parser'
 tptp = Tptp('/Users/cm772/Documents/Dev/tptp-parser')
-problems = list(tptp.get_problems({'SPC': 'FOF_.*'}))
+problems_all = list(tptp.get_problems({'SPC': 'FOF_.*'}))
+problems = problems_all
 
 #%%
-random.shuffle(problems)
-#problems = problems[:30]
+random.shuffle(problems_all)
+problems = problems_all[:30]
+
 
 #%%
 from tptp_features.strategic_features_rq import get_features
@@ -41,4 +43,4 @@ store = pd.HDFStore('problem_features.h5')
 store['features'] = data
 store['timeouts'] = pd.Series(dict(single=SINGLE_TIMEOUT, total=TOTAL_TIMEOUT))
 store.close()
-# %%
+
