@@ -2,8 +2,16 @@
 cd ..
 
 #%%
+rm -v save_extracted_features.log
+
+#%%
 import logging
 logger = logging.getLogger()
+fh = logging.FileHandler('save_extracted_features.log')
+fh.setLevel(logging.DEBUG)
+logger.addHandler(fh)
+ch = logging.StreamHandler()
+logger.addHandler(ch)
 logger.setLevel(logging.DEBUG)
 
 #%%
