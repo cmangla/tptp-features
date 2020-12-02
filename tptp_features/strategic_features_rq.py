@@ -57,7 +57,6 @@ def get_features_rq(problems, prob_timeout, timeout):
             job.refresh()
             yield (ParseOutcome.SUCCESS, job)
             finished_reg.remove(job_id, delete_job=True)
-            logging.debug(f"{time.ctime()} Finished {job.args[0].name}")
 
         for job_id in failed_reg.get_job_ids():
             if job_id not in jobs:
@@ -65,7 +64,6 @@ def get_features_rq(problems, prob_timeout, timeout):
 
             job = jobs[job_id]
             job.refresh()
-            logging.debug(f"{time.ctime()} Failed {job.args[0].name} with exception {job.exc_info.splitlines()[-1]}")
             yield (ParseOutcome.FAIL, job)
             failed_reg.remove(job_id, delete_job=True)
             # Seems job_ids sometimes change when moving to failed_reg. So
@@ -83,13 +81,16 @@ def get_features(problems, prob_timeout, timeout):
         if outcome == ParseOutcome.SUCCESS:
             data.append(job.result)
             pending -= 1
+            logging.debug(f"{time.ctime()} Finished {job.args[0].name}, pending {pending}")
         elif outcome == ParseOutcome.FAIL:
             failed.append((job.args[0].name, job.exc_info))
+            logging.debug(f"{time.ctime()} Failed {job.args[0].name} with exception {job.exc_info.splitlines()[-1]}")
         else:
             assert False, "Not Reachable"
 
-    pending -= len(set([n for n,_ in failed])) # Substract failed jobs
+    n_failed = len(set([n for n,_ in failed]))
+    pending -=  n_failed
     if pending > 0:
-        logging.debug(f"{time.ctime()} Still {pending} pending jobs remain but are not in queue. Probably timed out.")
+        logging.debug(f"{time.ctime()} Still {pending} pending jobs ({n_failed} failed) remain but are not in queue. Probably timed out.")
     
     return pandas.DataFrame(data), failed
