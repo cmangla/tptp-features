@@ -122,7 +122,7 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
                 ctx.negated_env = ctx.parentCtx.negated_env
 
     def enterFof_binary_nonassoc(self, ctx):
-        connective = ctx.binary_connective() # connective
+        connective = ctx.binary_connective()
         if connective.Impl():
             ctx.fof_unitary_formula(0).negated_env = not ctx.negated_env
         elif connective.If():
@@ -130,17 +130,26 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
         elif connective.Nor() or connective.Nand():
             ctx.fof_unitary_formula(0).negated_env = not ctx.negated_env
             ctx.fof_unitary_formula(1).negated_env = not ctx.negated_env
-        elif connective.Iff():
-            logging.debug('Iff (bi-implication) not implemented for context negation')
-        elif connective.Niff():
-            logging.debug('Niff (XOR) not implemented for context negation')
+        elif connective.Iff() or connective.Niff():
+            ctx.num_quantifiers = len(self.formula_quantifiers_true[self.current_formula])
         else:
-            logging.debug('UNREACHABLE')
+            assert False, 'UNREACHABLE: unknown connective'
 
+    def exitFof_binary_nonassoc(self, ctx):
+        connective = ctx.binary_connective()
+        if connective.Iff() or connective.Niff():
+            quantifiers = self.formula_quantifiers_true[self.current_formula][ctx.num_quantifiers:]
+            quantifiers = [not q for q in quantifiers]
+            self.formula_quantifiers_true[self.current_formula].extend(quantifiers)
 
     def enterFof_unary_formula(self, ctx):
         if ctx.unary_connective() and ctx.unary_connective().Not():
             ctx.fof_unitary_formula().negated_env = not ctx.negated_env
+
+    def enterFof_infix_unary(self, ctx):
+        for i in [0, 1]:
+            ctx.fof_term(i).negated_env = not ctx.negated_env
+
 
     def get_features(self, formulae=None):
         logging.debug("for features, using formulae: " + ",".join(
