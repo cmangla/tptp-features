@@ -39,7 +39,7 @@ data, failed = get_features(problems, SINGLE_TIMEOUT, TOTAL_TIMEOUT)
 
 #%%
 import pandas as pd
-store = pd.HDFStore('problem_features.h5')
+store = pd.HDFStore('data/problem_features.h5')
 store['features'] = data
 store['timeouts'] = pd.Series(dict(single=SINGLE_TIMEOUT, total=TOTAL_TIMEOUT))
 store.close()
