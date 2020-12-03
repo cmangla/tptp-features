@@ -15,8 +15,8 @@ logger.addHandler(ch)
 logger.setLevel(logging.DEBUG)
 
 #%%
-SINGLE_TIMEOUT = 10 # 60
-TOTAL_TIMEOUT = 10 # 3600*12
+SINGLE_TIMEOUT = 90
+TOTAL_TIMEOUT = 3600*12
 
 #%%
 from tptp_features.Tptp import Tptp
@@ -30,7 +30,7 @@ problems = problems_all
 
 #%%
 random.shuffle(problems_all)
-problems = problems_all[:30]
+problems = problems_all #[:30]
 
 
 #%%
@@ -44,3 +44,5 @@ store['features'] = data
 store['timeouts'] = pd.Series(dict(single=SINGLE_TIMEOUT, total=TOTAL_TIMEOUT))
 store.close()
 
+
+# %%

@@ -3,13 +3,17 @@ cd ..
 
 #%%
 from tptp_features.Tptp import Tptp
-from tptp_features.strategic_features import get_problem_features, parse_with_includes
+from tptp_features.strategic_features import get_problem_features, parse_with_includes, parse_one
 tptp = Tptp("../tptp-parser/")
 
 #%%
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
+
+# %%
+#
+f, i = parse_one(tptp, tptp.axioms['SET005+0'])
 
 # %%
 # Has implies, which causes quantifier negation!

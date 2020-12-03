@@ -53,16 +53,22 @@ class Listener(tptp_v7_0_0_0Listener):
         self.includes.append((fname, formulas))
 
 # %%
+from tptp_features.strategic_features import StrategicFeaturesListener
+
+# %%
 def parse_one(problem):
     lexer = tptp_v7_0_0_0Lexer(FileStream(problem.file))
     stream = CommonTokenStream(lexer)
     parser = tptp_v7_0_0_0Parser(stream)
     tree = parser.tptp_file()
-    listener = Listener()
+    listener = StrategicFeaturesListener()
     walker = ParseTreeWalker()
     walker.walk(listener, tree)
 
     return listener
+
+# %%
+l = parse_one(tptp.axioms['SET005+0'])
 
 # %%
 l = parse_one(tptp.axioms['SET006+0'])
