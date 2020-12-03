@@ -68,10 +68,16 @@ def parse_one(problem):
     return listener
 
 # %%
+l = parse_one(tptp.problems['CMX001'])
+
+# %%
 l = parse_one(tptp.axioms['SET005+0'])
 
 # %%
 l = parse_one(tptp.axioms['SET006+0'])
+
+# %%
+l = parse_one(tptp.problems['SYN000+1'])
 
 # %%
 class TimeoutException(Exception):
