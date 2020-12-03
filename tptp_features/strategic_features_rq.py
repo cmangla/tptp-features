@@ -13,7 +13,7 @@ from .strategic_features import get_problem_features
 FAILURE_TTL = 3600*48
 LOOP_SLEEP_TIME = 1
 
-class ParseOutcome(Enum):
+class RemoteOutcome(Enum):
     SUCCESS = auto()
     FAIL = auto()
 
@@ -55,7 +55,7 @@ def get_features_rq(problems, prob_timeout, timeout):
 
             job = jobs[job_id]
             job.refresh()
-            yield (ParseOutcome.SUCCESS, job)
+            yield (RemoteOutcome.SUCCESS, job)
             finished_reg.remove(job_id, delete_job=True)
 
         for job_id in failed_reg.get_job_ids():
@@ -64,7 +64,7 @@ def get_features_rq(problems, prob_timeout, timeout):
 
             job = jobs[job_id]
             job.refresh()
-            yield (ParseOutcome.FAIL, job)
+            yield (RemoteOutcome.FAIL, job)
             failed_reg.remove(job_id, delete_job=True)
             # Seems job_ids sometimes change when moving to failed_reg. So
             # failed job might show up twice here. Still not 100% clear.
@@ -78,11 +78,11 @@ def get_features(problems, prob_timeout, timeout):
 
     data = []
     for outcome, job in get_features_rq(problems, prob_timeout, timeout):
-        if outcome == ParseOutcome.SUCCESS:
+        if outcome == RemoteOutcome.SUCCESS:
             data.append(job.result)
             pending -= 1
             logging.debug(f"{time.ctime()} Finished {job.args[0].name}, pending {pending}")
-        elif outcome == ParseOutcome.FAIL:
+        elif outcome == RemoteOutcome.FAIL:
             failed.append((job.args[0].name, job.exc_info))
             logging.debug(f"{time.ctime()} Failed {job.args[0].name} with exception {job.exc_info.splitlines()[-1]}")
         else:
