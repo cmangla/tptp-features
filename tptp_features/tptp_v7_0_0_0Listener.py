@@ -1,4 +1,4 @@
-# Generated from ../TPTP-ANTLR4-Grammar/tptp_v7_0_0_0.g4 by ANTLR 4.8
+# Generated from ../TPTP-ANTLR4-Grammar/tptp_v7_0_0_0.g4 by ANTLR 4.9
 from antlr4 import *
 if __name__ is not None and "." in __name__:
     from .tptp_v7_0_0_0Parser import tptp_v7_0_0_0Parser
