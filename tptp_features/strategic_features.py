@@ -1,4 +1,4 @@
-from antlr4 import FileStream, CommonTokenStream, ParseTreeWalker
+from antlr4 import FileStream, CommonTokenStream, ParseTreeWalker, ParseTreeListener
 from .tptp_v7_0_0_0Lexer import tptp_v7_0_0_0Lexer
 from .tptp_v7_0_0_0Parser import tptp_v7_0_0_0Parser
 from .tptp_v7_0_0_0Listener import tptp_v7_0_0_0Listener
@@ -64,6 +64,7 @@ LEX_FEATURES = """
 PARSE_FEATURES = """
     QUANTIFIER_ALTERNATIONS
     QUANTIFIER_ALTERNATIONS_TRUE
+    QUANTIFIER_RANK
     QUANTIFIERS
 """.split()
 
@@ -74,16 +75,7 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
         self.current_formula = None
         self.formula_quantifiers = {}
         self.formula_quantifiers_true = {}
-        self.includes = []
-
-    def enterInclude(self, ctx):
-        fname = ctx.file_name().Single_quoted().getText().strip("'")
-        if ctx.formula_selection():
-            formulas = tuple((c.getText() for c in ctx.formula_selection().name_list().name()))
-        else:
-            formulas = None
-
-        self.includes.append((fname, formulas))
+        self.formula_quantifier_rank = {}
 
     def enterFof_annotated(self, ctx):
         assert self.current_formula is None
@@ -96,6 +88,8 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
 
     def exitFof_annotated(self, ctx):
         assert self.current_formula == ctx.name().getText()
+
+        self.formula_quantifier_rank[self.current_formula] = ctx.fof_formula().quantifier_rank
         self.current_formula = None
 
     def enterFof_quantifier(self, ctx):
@@ -120,6 +114,17 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
                 ctx.negated_env = False
             else:
                 ctx.negated_env = ctx.parentCtx.negated_env
+
+    def exitFof_quantified_formula(self, ctx):
+        ctx.quantifier_rank = 1 + getattr(
+            ctx.fof_unitary_formula(), 'quantifier_rank', 0
+            )
+
+    def exitEveryRule(self, ctx):
+        if not hasattr(ctx, 'quantifier_rank'):
+            ctx.quantifier_rank = max(
+                (getattr(c, 'quantifier_rank', 0) for c in ctx.getChildren())
+            )
 
     def enterFof_binary_nonassoc(self, ctx):
         connective = ctx.binary_connective()
@@ -178,6 +183,10 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
                 q = ['?' if i else '!' for i in q]
                 logging.debug(f"Quantifiers_true[{f}] = {','.join(q)}")
 
+        for f in formulae:
+            r = self.formula_quantifier_rank[f]
+            logging.debug(f"Quantifier_rank[{f}] = {r}")
+
         for formula in formulae:
             q = self.formula_quantifiers[formula]
             quantifier_counts += len(q)
@@ -188,11 +197,52 @@ class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
             for i, j in zip(q, q[1:]):
                 quantifier_alternations_true += 1 if i != j else 0
 
+        quantifier_rank = max((self.formula_quantifier_rank[f] for f in formulae))
         features.update({'QUANTIFIER_ALTERNATIONS': quantifier_alternations})
         features.update({'QUANTIFIER_ALTERNATIONS_TRUE': quantifier_alternations_true})
+        features.update({'QUANTIFIER_RANK': quantifier_rank})
         features.update({'QUANTIFIERS': quantifier_counts})
         return features
 
+class MultiFeatureListener(ParseTreeListener):
+
+    def __init__(self, listeners):
+        self.listeners = listeners
+        self.includes = []
+
+    def enterInclude(self, ctx):
+        fname = ctx.file_name().Single_quoted().getText().strip("'")
+        if ctx.formula_selection():
+            formulas = tuple((c.getText() for c in ctx.formula_selection().name_list().name()))
+        else:
+            formulas = None
+
+        self.includes.append((fname, formulas))
+
+    def visitTerminal(self, node):
+        for l in self.listeners:
+            l.visitTerminal(node)
+
+    def visitErrorNode(self, node):
+        for l in self.listeners:
+            l.visitErrorNode(node)
+
+    def enterEveryRule(self, ctx):
+        for l in self.listeners:
+            l.enterEveryRule(ctx)
+            ctx.enterRule(l)
+
+    def exitEveryRule(self, ctx):
+        for l in self.listeners:
+            ctx.exitRule(l)
+            l.exitEveryRule(ctx)
+
+    def get_features(self, formulae=None):
+        features = Counter()
+        for l in self.listeners:
+            features.update(l.get_features(formulae))
+
+        return features
 
 def get_features_index():
     return LEX_FEATURES + PARSE_FEATURES
@@ -210,7 +260,7 @@ def parse_one(tptp, problem, formulae=None):
     stream = CommonTokenStream(lexer)
     parser = tptp_v7_0_0_0Parser(stream)
     tree = parser.tptp_file()
-    listener = StrategicFeaturesListener()
+    listener = MultiFeatureListener([StrategicFeaturesListener()])
     walker = ParseTreeWalker()
     walker.walk(listener, tree)
 
