@@ -70,24 +70,18 @@ PARSE_FEATURES = """
 class QuantifierFeaturesListener(ParseTreeListener):
     def __init__(self):
         super().__init__()
-        self.formulae = set()
+        self.formulae = None
         self.current_formula = None
         self.formula_quantifiers = {}
         self.formula_quantifiers_true = {}
         self.formula_quantifier_rank = {}
 
     def enterFof_annotated(self, ctx):
-        assert self.current_formula is None
-        self.current_formula = ctx.name().getText()
-        assert self.current_formula not in self.formulae
-        self.formulae.add(self.current_formula)
-
         self.formula_quantifiers[self.current_formula] = []
         self.formula_quantifiers_true[self.current_formula] = []
 
     def exitFof_annotated(self, ctx):
         assert self.current_formula == ctx.name().getText()
-
         self.formula_quantifier_rank[self.current_formula] = ctx.fof_formula().quantifier_rank
         self.current_formula = None
 
@@ -99,13 +93,6 @@ class QuantifierFeaturesListener(ParseTreeListener):
             qf = not qf
 
         self.formula_quantifiers_true[self.current_formula].append(qf)
-
-    def enterFof_formula(self, ctx):
-        # logging.debug(dir(ctx))
-        # logging.debug(ctx.getText())
-        # logging.debug(ctx.fof_logic_formula().getText())
-        # logging.debug(ctx.fof_sequent())
-        pass
 
     def enterEveryRule(self, ctx):
         if not hasattr(ctx, 'negated_env'):
@@ -156,15 +143,11 @@ class QuantifierFeaturesListener(ParseTreeListener):
 
 
     def get_features(self, formulae=None):
-        logging.debug("for features, using formulae: " + ",".join(
-            formulae if formulae else ['ALL']
-        ))
-
         if formulae is None:
             formulae = self.formulae
         else:
             formulae = set(formulae)
-            assert(formulae <= self.formulae)
+            assert formulae <= self.formulae, f"{formulae} should be subset of {self.formulae}"
 
         features = Counter()
         quantifier_alternations = 0
@@ -203,10 +186,49 @@ class QuantifierFeaturesListener(ParseTreeListener):
         features.update({'QUANTIFIERS': quantifier_counts})
         return features
 
+class HelperFeaturesListener(ParseTreeListener):
+    """
+    Helps all other listeners in the list of listeners, by setting useful
+    variables in them. Puts itself at the beginning of list of listeners, and so
+    is called first on entry, and last on exit.
+    """
+
+    def __init__(self, listeners):
+        self.listeners = listeners
+        self.listeners.insert(0, self)
+        self.current_formula = None
+        self.formulae = set()
+        for l in listeners[1:]:
+            l.formulae = self.formulae
+
+    def _update_listeners(self):
+        assert self.listeners[0] is self
+        for l in self.listeners[1:]:
+            l.current_formula = self.current_formula
+
+    def enterFof_annotated(self, ctx):
+        assert self.current_formula is None
+        self.current_formula = ctx.name().getText()
+        assert self.current_formula not in self.formulae
+        self.formulae.add(self.current_formula)
+        self._update_listeners()
+
+    def exitFof_annotated(self, ctx):
+        assert self.current_formula == ctx.name().getText()
+        self.current_formula = None
+        self._update_listeners()
+    
+    def get_features(self, formulae=None):
+        logging.debug("for features, using formulae: " + ",".join(
+            formulae if formulae else ['ALL']
+        ))
+        return Counter()
+
 class MultiFeatureListener(ParseTreeListener):
 
     def __init__(self, listeners):
         self.listeners = listeners
+        HelperFeaturesListener(self.listeners)
         self.includes = []
 
     def enterInclude(self, ctx):
@@ -232,7 +254,7 @@ class MultiFeatureListener(ParseTreeListener):
             ctx.enterRule(l)
 
     def exitEveryRule(self, ctx):
-        for l in self.listeners:
+        for l in reversed(self.listeners):
             ctx.exitRule(l)
             l.exitEveryRule(ctx)
 
