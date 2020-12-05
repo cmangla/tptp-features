@@ -53,7 +53,7 @@ class Listener(tptp_v7_0_0_0Listener):
         self.includes.append((fname, formulas))
 
 # %%
-from tptp_features.strategic_features import StrategicFeaturesListener
+from tptp_features.strategic_features import QuantifierFeaturesListener
 
 # %%
 def parse_one(problem):
@@ -61,7 +61,7 @@ def parse_one(problem):
     stream = CommonTokenStream(lexer)
     parser = tptp_v7_0_0_0Parser(stream)
     tree = parser.tptp_file()
-    listener = StrategicFeaturesListener()
+    listener = QuantifierFeaturesListener()
     walker = ParseTreeWalker()
     walker.walk(listener, tree)
 

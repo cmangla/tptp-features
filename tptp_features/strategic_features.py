@@ -1,7 +1,6 @@
 from antlr4 import FileStream, CommonTokenStream, ParseTreeWalker, ParseTreeListener
 from .tptp_v7_0_0_0Lexer import tptp_v7_0_0_0Lexer
 from .tptp_v7_0_0_0Parser import tptp_v7_0_0_0Parser
-from .tptp_v7_0_0_0Listener import tptp_v7_0_0_0Listener
 
 from .Tptp import Tptp
 
@@ -68,7 +67,7 @@ PARSE_FEATURES = """
     QUANTIFIERS
 """.split()
 
-class StrategicFeaturesListener(tptp_v7_0_0_0Listener):
+class QuantifierFeaturesListener(ParseTreeListener):
     def __init__(self):
         super().__init__()
         self.formulae = set()
@@ -260,7 +259,7 @@ def parse_one(tptp, problem, formulae=None):
     stream = CommonTokenStream(lexer)
     parser = tptp_v7_0_0_0Parser(stream)
     tree = parser.tptp_file()
-    listener = MultiFeatureListener([StrategicFeaturesListener()])
+    listener = MultiFeatureListener([QuantifierFeaturesListener()])
     walker = ParseTreeWalker()
     walker.walk(listener, tree)
 
