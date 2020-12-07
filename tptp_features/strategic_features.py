@@ -1,10 +1,10 @@
-from antlr4 import FileStream, CommonTokenStream, ParseTreeWalker, ParseTreeListener
+from antlr4 import FileStream, CommonTokenStream, ParseTreeWalker, ParseTreeListener, ErrorNode, TerminalNode
 from .tptp_v7_0_0_0Lexer import tptp_v7_0_0_0Lexer
 from .tptp_v7_0_0_0Parser import tptp_v7_0_0_0Parser
 
 from .Tptp import Tptp
 
-from collections import Counter
+from collections import Counter, deque
 import pandas as pd
 import numpy  as np
 
@@ -268,6 +268,29 @@ class MultiFeatureListener(ParseTreeListener):
 def get_features_index():
     return LEX_FEATURES + PARSE_FEATURES
 
+class ParseTreeWalkerIterative(ParseTreeWalker):
+
+    def walk(self, listener, t):
+        stack = deque([(False, t)]) # [(a: Bool, n: ParseTree), ...] ; a is True if node needs exiting
+        while stack:
+            needsExit, t = stack.pop()
+            if needsExit:
+                self.exitRule(listener, t)
+            elif isinstance(t, ErrorNode):
+                listener.visitErrorNode(t)
+            elif isinstance(t, TerminalNode):
+                listener.visitTerminal(t)
+            else:
+                self.enterRule(listener, t)
+                stack.append((True, t)) # For exit of this rule
+                if not t.children:
+                    continue
+
+                stack.extend(
+                    ((False, i) for i in reversed(t.children))
+                )
+
+
 def parse_one(tptp, problem, formulae=None):
     infile = FileStream(problem.file)
     lexer = tptp_v7_0_0_0Lexer(infile)
@@ -282,7 +305,7 @@ def parse_one(tptp, problem, formulae=None):
     parser = tptp_v7_0_0_0Parser(stream)
     tree = parser.tptp_file()
     listener = MultiFeatureListener([QuantifierFeaturesListener()])
-    walker = ParseTreeWalker()
+    walker = ParseTreeWalkerIterative()
     walker.walk(listener, tree)
 
     features.update(listener.get_features(formulae))
