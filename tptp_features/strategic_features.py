@@ -65,6 +65,8 @@ PARSE_FEATURES = """
     QUANTIFIER_ALTERNATIONS_TRUE
     QUANTIFIER_RANK
     QUANTIFIERS
+    MEAN_FN_ARITY
+    MAX_FN_ARITY
 """.split()
 
 class QuantifierFeaturesListener(ParseTreeListener):
@@ -186,6 +188,51 @@ class QuantifierFeaturesListener(ParseTreeListener):
         features.update({'QUANTIFIERS': quantifier_counts})
         return features
 
+class FunctionsFeaturesListener(ParseTreeListener):
+    def __init__(self):
+        super().__init__()
+        self.formulae = None
+        self.current_formula = None
+        self.formula_functions = {} # formula -> set(functions)
+        self.functions = {} # function -> arity
+
+    def enterFof_annotated(self, ctx):
+        self.formula_functions[self.current_formula] = set()
+
+    def exitFof_annotated(self, ctx):
+        assert self.current_formula == ctx.name().getText()
+
+    def enterFof_plain_term(self, ctx):
+        if ctx.constant():
+            return
+
+        fn_name = ctx.functor().getText()
+        self.formula_functions[self.current_formula].add(fn_name)
+
+        if fn_name in self.functions:
+            return
+
+        fn_args = ctx.fof_arguments().fof_term()
+        self.functions[fn_name] = len(fn_args)
+
+    def get_features(self, formulae=None):
+        if formulae is None:
+            formulae = self.formulae
+        else:
+            formulae = set(formulae)
+
+        arities = [
+            self.functions[function]
+                for formula in formulae
+                for function in self.formula_functions[formula]
+        ]
+        return Counter(
+            {
+                'MEAN_FN_ARITY': sum(arities)/len(arities) if arities else 0,
+                'MAX_FN_ARITY': max(arities) if arities else 0
+            }
+        )
+
 class HelperFeaturesListener(ParseTreeListener):
     """
     Helps all other listeners in the list of listeners, by setting useful
@@ -304,7 +351,10 @@ def parse_one(tptp, problem, formulae=None):
     stream = CommonTokenStream(lexer)
     parser = tptp_v7_0_0_0Parser(stream)
     tree = parser.tptp_file()
-    listener = MultiFeatureListener([QuantifierFeaturesListener()])
+    listener = MultiFeatureListener([
+        QuantifierFeaturesListener(),
+        FunctionsFeaturesListener()
+    ])
     walker = ParseTreeWalkerIterative()
     walker.walk(listener, tree)
 
