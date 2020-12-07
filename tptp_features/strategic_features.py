@@ -149,7 +149,6 @@ class QuantifierFeaturesListener(ParseTreeListener):
             formulae = self.formulae
         else:
             formulae = set(formulae)
-            assert formulae <= self.formulae, f"{formulae} should be subset of {self.formulae}"
 
         features = Counter()
         quantifier_alternations = 0
@@ -237,7 +236,7 @@ class HelperFeaturesListener(ParseTreeListener):
     """
     Helps all other listeners in the list of listeners, by setting useful
     variables in them. Puts itself at the beginning of list of listeners, and so
-    is called first on entry, and last on exit.
+    is called first on entry, and last on exit. Used by MultiFeatureListener .
     """
 
     def __init__(self, listeners):
@@ -269,9 +268,16 @@ class HelperFeaturesListener(ParseTreeListener):
         logging.debug("for features, using formulae: " + ",".join(
             formulae if formulae else ['ALL']
         ))
+        if formulae:
+            formulae = set(formulae)
+            assert formulae <= self.formulae, f"{formulae} should be subset of {self.formulae}"
+
         return Counter()
 
 class MultiFeatureListener(ParseTreeListener):
+    """
+    Dispatch to a list of listeners that can generate features
+    """
 
     def __init__(self, listeners):
         self.listeners = listeners
