@@ -314,10 +314,10 @@ def parse_one(tptp, problem, formulae=None):
 
 def parse_with_includes(problem):
     tptp = Tptp(problem.tptp)
-    includes = [(problem, None)]
+    includes = deque([(problem, None)])
     features = Counter()
     while includes:
-        prob, formulae = includes.pop(0)
+        prob, formulae = includes.popleft()
         logging.debug('Including {}, {}'.format(prob.name, formulae))
         prob_features, prob_includes = parse_one(tptp, prob, formulae)
         includes.extend(prob_includes)
