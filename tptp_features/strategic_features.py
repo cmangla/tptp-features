@@ -179,7 +179,7 @@ class QuantifierFeaturesListener(ParseTreeListener):
             for i, j in zip(q, q[1:]):
                 quantifier_alternations_true += 1 if i != j else 0
 
-        quantifier_rank = max((self.formula_quantifier_rank[f] for f in formulae))
+        quantifier_rank = max((self.formula_quantifier_rank[f] for f in formulae)) if formulae else 0
         features.update({'QUANTIFIER_ALTERNATIONS': quantifier_alternations})
         features.update({'QUANTIFIER_ALTERNATIONS_TRUE': quantifier_alternations_true})
         features.update({'QUANTIFIER_RANK': quantifier_rank})

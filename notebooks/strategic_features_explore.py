@@ -31,6 +31,9 @@ f = parse_with_includes(tptp.axioms['SET007+1'])
 
 f = get_problem_features(tptp.problems['NUM303+1'])
 
+# %%
+# Gave an error once:  ValueError: max() arg is an empty sequence
+f = parse_with_includes(tptp.problems['GEO160+1'])
 
 #%%
 f = get_problem_features(tptp.problems['PUZ069+2'])
