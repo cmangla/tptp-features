@@ -12,6 +12,11 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 # %%
+# ['HWV056+1', 'HWV057+1', 'HWV060+1', 'HWV058+1', 'HWV059+1', 'HWV055+1'] --
+# still recursion error
+f = parse_with_includes(tptp.problems['HWV055+1'])
+
+# %%
 #
 f, i = parse_one(tptp, tptp.axioms['SET005+0'])
 
@@ -28,8 +33,10 @@ f = parse_with_includes(tptp.axioms['SET007+1'])
 #
 #fof(n31_not_n12,conjecture,
 #    (  n31 != n21 )).
-
 f = get_problem_features(tptp.problems['NUM303+1'])
+
+# %%
+%timeit get_problem_features(tptp.problems['NUM303+1'])
 
 # %%
 # Gave an error once:  ValueError: max() arg is an empty sequence
