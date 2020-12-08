@@ -89,10 +89,12 @@ print()
 # %%
 # install.packages("ggplot2")
 # d <- read.csv("d", header = TRUE)
+# d$y = as.factor(d$y)
 # library("ggplot2")
 # ggplot(d, aes(x=x,y=y,size=score,label=sprintf("%0.2f", round(score, digits = 2)))) + geom_point(shape = 21, fill = "white") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + geom_text(size=1)
 # ggplot(d, aes(reorder(x, score, FUN=median),score,label=y)) + geom_point(shape = 21, fill = "white") + geom_text(size=1) + coord_flip()
 # ggplot(d, aes(reorder(x, score, FUN=mean),score)) + geom_boxplot(outlier.shape = NA) + geom_jitter(size=.5,color="red",width=0.1) + coord_flip()
+# ggplot(d, aes(reorder(x, score, FUN=mean),score)) + geom_boxplot(outlier.shape = NA, notch = FALSE) + geom_jitter(aes(color=y),size=0.5,width=0.1) + labs(color="Strategy",x="Feature",y="How well individual feature predicts score of strategy") + coord_flip()
 
 # %%
 xavg = {}
