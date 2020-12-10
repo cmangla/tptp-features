@@ -67,6 +67,7 @@ PARSE_FEATURES = """
     QUANTIFIERS
     MEAN_FN_ARITY
     MAX_FN_ARITY
+    COUNT_FN
 """.split()
 
 class QuantifierFeaturesListener(ParseTreeListener):
@@ -220,15 +221,18 @@ class FunctionsFeaturesListener(ParseTreeListener):
         else:
             formulae = set(formulae)
 
-        arities = [
-            self.functions[function]
-                for formula in formulae
-                for function in self.formula_functions[formula]
-        ]
+        functions = set([
+            function
+            for formula in formulae
+            for function in self.formula_functions[formula]
+        ])
+        arities = [self.functions[f] for f in functions]
+
         return Counter(
             {
                 'MEAN_FN_ARITY': sum(arities)/len(arities) if arities else 0,
-                'MAX_FN_ARITY': max(arities) if arities else 0
+                'MAX_FN_ARITY': max(arities) if arities else 0,
+                'COUNT_FN': len(functions),
             }
         )
 
