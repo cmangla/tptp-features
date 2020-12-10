@@ -11,6 +11,7 @@ TptpProblem = namedtuple("TptpProblem", "group name file tptp")
 TptpAxiom   = namedtuple("TptpAxiom", "name file tptp")
 
 TPTP_PY_CACHE_FILENAME = 'Tptp.py.cache.pickle'
+from .constants import PICKLE_PROTOCOL
 
 class TptpException(Exception):
     pass
@@ -55,7 +56,7 @@ class Tptp:
 
             data = dict(problems=self.problems, axioms=self.axioms)
             with (self.tptpdir / TPTP_PY_CACHE_FILENAME).open(mode='wb') as j:
-                pickle.dump(data, j, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(data, j, protocol=PICKLE_PROTOCOL)
                 logging.debug(f"Saved cache to {TPTP_PY_CACHE_FILENAME}")
 
     def parse_meta(self, problem):
@@ -67,7 +68,10 @@ class Tptp:
             
             metadata = {}
             lastkey = None
-            while not (l := f.readline().strip()).startswith('%-'):
+            while True:
+                l = f.readline().strip()
+                if l and l.startswith('%-'): break
+
                 if not l:
                     continue
 

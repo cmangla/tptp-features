@@ -9,9 +9,16 @@ from redis import Redis
 import pandas
 
 from .strategic_features import get_problem_features
+from .constants import PICKLE_PROTOCOL
 
 FAILURE_TTL = 3600*48
 LOOP_SLEEP_TIME = 1
+
+from functools import partial
+import pickle
+class RQSerializer:
+    dumps = partial(pickle.dumps, protocol=PICKLE_PROTOCOL)
+    loads = pickle.loads
 
 class RemoteOutcome(Enum):
     SUCCESS = auto()
@@ -19,7 +26,7 @@ class RemoteOutcome(Enum):
 
 def get_features_rq(problems, prob_timeout, timeout):
     redis_conn = Redis()
-    queue = Queue(connection=redis_conn)
+    queue = Queue(connection=redis_conn, serializer=RQSerializer)
 
     logging.debug(f"{time.ctime()} Queueing jobs ...")
     jobs = [
